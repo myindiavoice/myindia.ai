@@ -5,15 +5,17 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/petitions/[id]/signers
+ * GET /api/petitions/[id]/signers?limit=50&offset=0
  * Returns partial signer list (first name + verified status only) for petition authors.
  * Enforces RLS: Only returns data if the authenticated user owns the petition.
+ * Supports pagination via limit and offset query parameters.
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    // Use createRouteHandlerClient for authenticated requests (anon key + user JWT)
     const supabase = createRouteHandlerClient({ cookies });
 
     // Verify authentication
@@ -28,24 +30,46 @@ export async function GET(
       );
     }
 
-    // Call the secure RPC function
-    // This will return data only if the user owns the petition
-    const { data, error } = await supabase.rpc('get_petition_signers', {
-      p_petition_id: params.id,
-    });
+    // Parse pagination parameters
+    const { searchParams } = new URL(request.url);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 200);
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0'), 0);
 
-    if (error) {
-      console.error('RPC error:', error);
+    // Call the secure RPC functions
+    // These enforce authorization: only return data if user owns the petition
+    const [signersResult, countResult] = await Promise.all([
+      supabase.rpc('get_petition_signers', {
+        p_petition_id: params.id,
+        p_limit: limit,
+        p_offset: offset,
+      }),
+      supabase.rpc('get_petition_signer_count', {
+        p_petition_id: params.id,
+      }),
+    ]);
+
+    if (signersResult.error) {
+      console.error('RPC get_petition_signers error:', signersResult.error);
       return NextResponse.json(
         { error: 'Failed to fetch signers' },
         { status: 500 }
       );
     }
 
-    // data will be null or empty if user doesn't own the petition (RLS enforcement)
+    if (countResult.error) {
+      console.error('RPC get_petition_signer_count error:', countResult.error);
+      return NextResponse.json(
+        { error: 'Failed to fetch signer count' },
+        { status: 500 }
+      );
+    }
+
+    // If data is null/empty, user doesn't own the petition (RLS enforcement)
     return NextResponse.json({
-      signers: data || [],
-      total_count: data?.length || 0,
+      signers: signersResult.data || [],
+      total: countResult.data || 0,
+      limit,
+      offset,
     });
   } catch (error) {
     console.error('Unexpected error:', error);
