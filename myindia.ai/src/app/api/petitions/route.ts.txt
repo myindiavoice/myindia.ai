@@ -1,0 +1,95 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { slugify } from "@/lib/utils";
+import crypto from "crypto";
+import { z } from "zod";
+
+const createPetitionSchema = z.object({
+  title: z.string().min(10).max(200),
+  summary: z.string().min(20).max(500),
+  body: z.string().min(50),
+  goal: z.number().int().min(100).max(10000000),
+});
+
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = getSupabaseServer();
+
+    // Get authenticated user
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check if user is banned
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_banned")
+      .eq("user_id", user.id)
+      .single();
+
+    if (profile?.is_banned) {
+      return NextResponse.json(
+        { error: "Account is banned" },
+        { status: 403 }
+      );
+    }
+
+    // Parse and validate request body
+    const body = await req.json();
+    const validated = createPetitionSchema.parse(body);
+
+    // Generate unique slug
+    const baseSlug = slugify(validated.title);
+    const randomSuffix = crypto.randomBytes(3).toString("hex");
+    const slug = `${baseSlug}-${randomSuffix}`;
+
+    // Create petition
+    const { data: petition, error: createError } = await supabase
+      .from("petitions")
+      .insert({
+        author_id: user.id,
+        title: validated.title,
+        slug,
+        summary: validated.summary,
+        body: validated.body,
+        goal: validated.goal,
+        status: "public",
+        published_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (createError) {
+      console.error("Failed to create petition:", createError);
+      return NextResponse.json(
+        { error: "Failed to create petition" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(petition, { status: 201 });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Invalid request data", details: error.errors },
+        { status: 400 }
+      );
+    }
+
+    console.error("Error creating petition:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
