@@ -3,6 +3,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { slugify } from "@/lib/utils";
 import crypto from "crypto";
 import { z } from "zod";
+import { cookies } from "next/headers";
 
 const createPetitionSchema = z.object({
   title: z.string().min(10).max(200),
@@ -15,16 +16,19 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabaseServer();
 
-    // Get authenticated user
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
+    // Get session from cookies
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get('sb-access-token')?.value;
+    
+    if (!accessToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Verify user with the access token
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+    } = await supabase.auth.getUser(accessToken);
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
