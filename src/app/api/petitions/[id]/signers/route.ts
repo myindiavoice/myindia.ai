@@ -1,6 +1,8 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const dynamic = 'force-dynamic';
 
@@ -15,15 +17,31 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Use createRouteHandlerClient for authenticated requests (anon key + user JWT)
-    const supabase = createRouteHandlerClient({ cookies });
+    // Extract Bearer token from Authorization header
+    const authHeader = request.headers.get('authorization');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
 
-    // Verify authentication
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    if (!session) {
+    // Create Supabase client with the user's JWT token
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
+    // Verify the token by getting user
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
