@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         email: validated.email,
         email_normalized: emailNormalized,
         comment: validated.comment,
-        ip: req.ip || req.headers.get("x-forwarded-for") || null,
+        ip: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
         user_agent: req.headers.get("user-agent") || null,
         status: "unconfirmed",
       })
@@ -111,3 +111,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
