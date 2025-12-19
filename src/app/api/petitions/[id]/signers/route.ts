@@ -14,9 +14,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  context: { params: { id: string } }) {
   try {
+        const { id: petitionId } = context.params;
     // Extract Bearer token from Authorization header
     const authHeader = request.headers.get('authorization');
     
@@ -57,12 +57,12 @@ export async function GET(
     // These enforce authorization: only return data if user owns the petition
     const [signersResult, countResult] = await Promise.all([
       supabase.rpc('get_petition_signers', {
-        p_petition_id: params.id,
+        p_petition_id: petitionId,
         p_limit: limit,
         p_offset: offset,
       }),
       supabase.rpc('get_petition_signer_count', {
-        p_petition_id: params.id,
+        p_petition_id: petitionId,
       }),
     ]);
 
