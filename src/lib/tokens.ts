@@ -7,12 +7,13 @@ interface TokenPayload {
   signatureId: string;
   petitionId: string;
   exp: number;
+    nonce: string;
 }
 
 export function signToken(payload: Omit<TokenPayload, "exp">): string {
   const exp = Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000;
-  const data: TokenPayload = { ...payload, exp };
-  const json = JSON.stringify(data);
+    const nonce = crypto.randomBytes(16).toString('hex');
+  const data: TokenPayload = { ...payload, exp, nonce };  const json = JSON.stringify(data);
   const hmac = crypto
     .createHmac("sha256", SIGNING_SECRET)
     .update(json)
@@ -48,3 +49,4 @@ export function verifyToken(token: string): TokenPayload | null {
     return null;
   }
 }
+
