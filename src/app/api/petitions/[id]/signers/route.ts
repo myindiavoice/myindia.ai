@@ -14,9 +14,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }) {
+  context: { params: Promise<{ id: string }> }) {
   try {
-        const { id: petitionId } = context.params;
+        const { id: petitionId } = await context.params;
     // Extract Bearer token from Authorization header
     const authHeader = request.headers.get('authorization');
     
