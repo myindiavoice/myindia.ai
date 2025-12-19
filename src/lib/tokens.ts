@@ -10,7 +10,7 @@ interface TokenPayload {
     nonce: string;
 }
 
-export function signToken(payload: Omit<TokenPayload, "exp">): string {
+export function signToken(payload: Omit<TokenPayload, "exp" | "nonce">): string {
   const exp = Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000;
     const nonce = crypto.randomBytes(16).toString('hex');
   const data: TokenPayload = { ...payload, exp, nonce };  const json = JSON.stringify(data);
@@ -49,4 +49,5 @@ export function verifyToken(token: string): TokenPayload | null {
     return null;
   }
 }
+
 
